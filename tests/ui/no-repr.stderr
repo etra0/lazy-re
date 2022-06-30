@@ -1,0 +1,5 @@
+error: The struct does not have the attribute #[repr(C, packed)]
+ --> tests/ui/no-repr.rs:5:8
+  |
+5 | struct Baz {
+  |        ^^^

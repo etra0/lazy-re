@@ -1,0 +1,20 @@
+[package]
+name = "lazy-re"
+version = "0.1.0"
+edition = "2021"
+authors = ["Sebastián Aedo <sebastian.aedo29@gmail.com>"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+syn = { version = "1.0", features = ["full", "extra-traits"] }
+quote = "1.0"
+
+[dev-dependencies]
+trybuild = "1.0"
+
+[lib]
+proc-macro = true
+
+[[test]]
+name = "test"
+path = "tests/test.rs"
