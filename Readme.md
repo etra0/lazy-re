@@ -5,23 +5,21 @@ It basically creates the padding for you.
 
 ```rust
 #[repr(C, packed)]
-#[derive(LazyRe)]
 #[lazy_re]
 struct Lights {
-    #[offset = 0x10]
+    #[lazy_re(offset = 0x10)]
     x: f32,
     y: f32,
     z: f32
 }
 
 #[repr(C, packed)]
-#[derive(LazyRe)]
 #[lazy_re]
 struct PlayerEntity {
-    #[offset = 0x48]
+    #[lazy_re(offset = 0x48)]
     light: Lights,
 
-    #[offset = 0x90]
+    #[lazy_re(offset = 0x90)]
     player_x: f32,
     player_y: f32,
     player_z: f32,

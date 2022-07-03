@@ -1,23 +1,23 @@
 error: Expected named struct
- --> tests/ui/expect-named-struct.rs:6:8
+ --> tests/ui/expect-named-struct.rs:5:8
   |
-6 | struct Bar(u32, u32, i8);
+5 | struct Bar(u32, u32, i8);
   |        ^^^
 
 error: Expected named struct
- --> tests/ui/expect-named-struct.rs:9:6
+ --> tests/ui/expect-named-struct.rs:8:6
   |
-9 | enum Baz {
+8 | enum Baz {
   |      ^^^
 
 error: Expected named struct
-  --> tests/ui/expect-named-struct.rs:14:7
+  --> tests/ui/expect-named-struct.rs:13:7
    |
-14 | union Bax {
+13 | union Bax {
    |       ^^^
 
 error: expected one of: `struct`, `enum`, `union`
-  --> tests/ui/expect-named-struct.rs:20:5
+  --> tests/ui/expect-named-struct.rs:19:5
    |
-20 | pub fn foo() {}
+19 | pub fn foo() {}
    |     ^^

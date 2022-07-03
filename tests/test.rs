@@ -1,44 +1,40 @@
-use lazy_re::{lazy_re, LazyRe};
+use lazy_re::lazy_re;
 
 #[lazy_re]
 #[repr(C, packed)]
-#[derive(LazyRe)]
 struct Foo {
-    #[offset = 0x42]
+    #[lazy_re(offset = 0x42)]
     other_member: usize,
 
-    #[offset = 0x90]
+    #[lazy_re(offset = 0x90)]
     foo: usize,
 }
 
 #[lazy_re]
-#[derive(LazyRe)]
 #[repr(C, packed)]
 struct Bar {
     no_offset: usize,
 
-    #[offset = 0x42]
+    #[lazy_re(offset = 0x42)]
     offset: usize,
 }
 
 #[repr(C, packed)]
-#[derive(LazyRe)]
 #[lazy_re]
 struct Lights {
-    #[offset = 0x10]
+    #[lazy_re(offset = 0x10)]
     x: f32,
     y: f32,
     z: f32
 }
 
 #[repr(C, packed)]
-#[derive(LazyRe)]
 #[lazy_re]
 struct PlayerEntity {
-    #[offset = 0x48]
+    #[lazy_re(offset = 0x48)]
     light: Lights,
 
-    #[offset = 0x90]
+    #[lazy_re(offset = 0x90)]
     player_x: f32,
     player_y: f32,
     player_z: f32,

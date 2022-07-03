@@ -1,8 +1,7 @@
-use lazy_re::{lazy_re, LazyRe};
+use lazy_re::lazy_re;
 
-#[repr(C, packed)]
-#[derive(LazyRe)]
 #[lazy_re]
+#[repr(C, packed)]
 struct Bar(u32, u32, i8);
 
 #[lazy_re]
