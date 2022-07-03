@@ -2,13 +2,29 @@ use std::collections::HashSet;
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::parse::Parser;
-use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields};
+use syn::parse::{Parser, Parse};
+use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields, Token, LitInt};
+
+struct Offset(usize);
+
+mod keyword {
+    syn::custom_keyword!(offset);
+}
 
 #[proc_macro_derive(LazyRe, attributes(offset))]
 pub fn derive_helper_attr(_input: TokenStream) -> TokenStream {
     // TODO: impl Debug, new.
     TokenStream::new()
+}
+
+impl Parse for Offset {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        input.parse::<keyword::offset>()?;
+        input.parse::<Token![=]>()?;
+        let val: LitInt = input.parse()?;
+
+        Ok(Offset(val.base10_parse()?))
+    }
 }
 
 fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
@@ -62,23 +78,23 @@ fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
         ))
     }
 
-    for field in fields.iter() {
+    for field in fields.iter_mut() {
         let mut offs = None;
         // We need to check the attribute offset is actually present on the struct.
         // TODO: Maybe omit using the derive and just make everything in lazy_re.
-        for attr in field.attrs.iter() {
-            let (path, value) = match attr.parse_meta().unwrap() {
-                syn::Meta::NameValue(syn::MetaNameValue {
-                    path,
-                    lit: syn::Lit::Int(s),
-                    ..
-                }) => (path, s),
+        let mut ix_to_remove = None;
+        for (i, attr) in field.attrs.iter().enumerate() {
+            let path = match attr.parse_meta().unwrap() {
+                syn::Meta::List(syn::MetaList { path, .. }) => path,
                 _ => continue,
             };
 
-            if path.get_ident().unwrap() == "offset" {
-                offs = Some(value);
+            if path.get_ident().unwrap() != "lazy_re" {
+                continue
             }
+
+            offs = Some(attr.parse_args::<Offset>()?.0);
+            ix_to_remove = Some(i);
         }
 
         if offs.is_none() {
@@ -86,6 +102,7 @@ fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
             continue;
         }
 
+        field.attrs.remove(ix_to_remove.unwrap());
         let offs = offs.unwrap();
         let new_ident = format_ident!("__pad{:03}", current_ix);
         current_ix += 1;

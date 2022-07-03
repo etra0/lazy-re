@@ -1,11 +1,10 @@
-use lazy_re::{lazy_re, LazyRe};
+use lazy_re::lazy_re;
 
-#[derive(LazyRe)]
 #[lazy_re]
 struct Baz {
     no_offset: usize,
 
-    #[offset = 0x42]
+    #[lazy_re(offset = 0x42)]
     offset: usize,
 }
 
