@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::parse::{Parser, Parse};
-use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields, Token, LitInt};
+use syn::parse::{Parse, Parser};
+use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields, LitInt, Token};
 
 struct Offset(usize);
 
@@ -75,7 +75,7 @@ fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
         return Err(syn::Error::new(
             ast.ident.span(),
             "The struct does not have the attribute #[repr(C, packed)]",
-        ))
+        ));
     }
 
     for field in fields.iter_mut() {
@@ -129,6 +129,6 @@ pub fn lazy_re(_args: TokenStream, input: TokenStream) -> TokenStream {
 
     match lazy_re_impl(ast) {
         Ok(res) => res,
-        Err(e) => e.to_compile_error().into()
+        Err(e) => e.to_compile_error().into(),
     }
 }

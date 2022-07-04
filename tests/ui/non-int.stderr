@@ -1,0 +1,5 @@
+error: expected integer literal
+ --> tests/ui/non-int.rs:7:24
+  |
+7 |     #[lazy_re(offset = 'a')]
+  |                        ^^^

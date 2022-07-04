@@ -1,0 +1,5 @@
+error: expected attribute arguments in parentheses: #[lazy_re(...)]
+ --> tests/ui/empty-lazy-re.rs:6:5
+  |
+6 |     #[lazy_re]
+  |     ^^^^^^^^^^
