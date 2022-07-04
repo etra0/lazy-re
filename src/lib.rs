@@ -84,13 +84,8 @@ fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
         // TODO: Maybe omit using the derive and just make everything in lazy_re.
         let mut ix_to_remove = None;
         for (i, attr) in field.attrs.iter().enumerate() {
-            let path = match attr.parse_meta().unwrap() {
-                syn::Meta::List(syn::MetaList { path, .. }) => path,
-                _ => continue,
-            };
-
-            if path.get_ident().unwrap() != "lazy_re" {
-                continue
+            if !attr.path.is_ident("lazy_re") {
+                continue;
             }
 
             offs = Some(attr.parse_args::<Offset>()?.0);
