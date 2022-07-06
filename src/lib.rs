@@ -1,9 +1,15 @@
-use std::collections::HashSet;
-
+//! # Lazy RE
+//! Sometimes we're lazy and we don't need to fully reverse engineer a struct, so we can omit some
+//! fields we're not interested in.
+//!
+//! With this library, you can generate padding without the need of doing mental math every time
+//! you need to change your struct, so you won't have to keep track of the padding in your head,
+//! this proc macro will generate it for you!
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
+use std::collections::HashSet;
 use syn::parse::{Parse, Parser};
-use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields, LitInt, Token};
+use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields, FieldsNamed, LitInt, Token};
 
 struct Offset(usize);
 
@@ -42,24 +48,21 @@ fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
         }
     };
 
-    // This is too cumbersome, but I don't know any other way of easily checking if the struct is
-    // actually a repr of C and it's packed.
+    // We need to check if the struct we're working with implements #[repr(C, packed)]. That's the
+    // only way we can guarantee the sizes correspond to what we're declaring, since a struct with
+    // offset could have some sort of padding which could make bugs harder to track down. The main
+    // disadvantage is that we cannot have pointers to everything because misalignment could
+    // happen.
     for attr in ast.attrs.iter() {
         let (path, nested) = match attr.parse_meta()? {
-            syn::Meta::List(syn::MetaList { path, nested, .. }) => (Some(path), Some(nested)),
-            _ => (None, None),
+            syn::Meta::List(syn::MetaList { path, nested, .. }) => (path, nested),
+            _ => continue,
         };
 
-        if path.is_none() {
+        if !path.is_ident("repr") {
             continue;
         }
 
-        let path = path.unwrap();
-        if path.get_ident().unwrap() != "repr" {
-            continue;
-        }
-
-        let nested = nested.unwrap();
         let nested_names = nested
             .iter()
             .map(|x| match x {
@@ -78,10 +81,10 @@ fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
         ));
     }
 
-    for field in fields.iter_mut() {
+    let local_fields = std::mem::replace(fields, syn::punctuated::Punctuated::new());
+    for mut field in IntoIterator::into_iter(local_fields) {
         let mut offs = None;
         // We need to check the attribute offset is actually present on the struct.
-        // TODO: Maybe omit using the derive and just make everything in lazy_re.
         let mut ix_to_remove = None;
         for (i, attr) in field.attrs.iter().enumerate() {
             if !attr.path.is_ident("lazy_re") {
@@ -93,36 +96,59 @@ fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
         }
 
         if offs.is_none() {
-            all_fields.push(field.clone());
+            all_fields.push(field);
             continue;
         }
 
+        // ix_to_remove is Some if offs is some, So we can be sure this would never fail.
         field.attrs.remove(ix_to_remove.unwrap());
         let offs = offs.unwrap();
+
         let new_ident = format_ident!("__pad{:03}", current_ix);
         current_ix += 1;
         let all_fields_ty = all_fields.iter().map(|field| &field.ty);
-        let field_to_add = if all_fields.len() > 0 {
-            syn::Field::parse_named
-            .parse2(quote! {  #new_ident: [u8; #offs - (#(std::mem::size_of::<#all_fields_ty>())+*)]})
-            .unwrap()
-        } else {
-            syn::Field::parse_named
-                .parse2(quote! {  #new_ident: [u8; #offs]})
-                .unwrap()
-        };
+        let field_to_add = syn::Field::parse_named
+            .parse2(quote! {  #new_ident: [u8; #offs - (0 #(+ std::mem::size_of::<#all_fields_ty>())*)]})
+            .unwrap();
 
         all_fields.push(field_to_add);
-        all_fields.push(field.clone());
+        all_fields.push(field);
     }
 
-    // There's probably an easier way of doing this, but for now I'm OK with this.
-    fields.clear();
-    all_fields.drain(..).for_each(|x| fields.push(x));
+    fields.extend(all_fields.drain(..));
 
     Ok(quote! { #ast }.into())
 }
 
+/// This proc macro will generate padding fields for your struct every time you have a struct that
+/// has fields with the macro.
+///
+/// # Example
+///
+/// ```
+/// use lazy_re::lazy_re;
+/// #[lazy_re]
+/// #[repr(C, packed)]
+/// pub struct Foo {
+///     #[lazy_re(offset = 0x42)]
+///     pub foo: usize
+/// }
+/// ```
+///
+/// This struct now will be expanded to a struct with two fields and its respective padding:
+///
+/// ```
+/// use lazy_re::lazy_re;
+/// #[lazy_re]
+/// #[repr(C, packed)]
+/// pub struct Foo {
+///     __pad000: [u8; 0x42],
+///     pub foo: usize
+/// }
+/// ```
+///
+/// The utility of this macro is when you're reverse engineering something and you're only
+/// interested in some fields of a big struct, you can use this macro to cast raw pointers.
 #[proc_macro_attribute]
 pub fn lazy_re(_args: TokenStream, input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
