@@ -17,10 +17,60 @@ mod keyword {
     syn::custom_keyword!(offset);
 }
 
-#[proc_macro_derive(LazyRe, attributes(offset))]
-pub fn derive_helper_attr(_input: TokenStream) -> TokenStream {
-    // TODO: impl Debug, new.
-    TokenStream::new()
+fn get_fields<'a>(
+    ast: &'a mut syn::Data,
+    ident: &'_ syn::Ident,
+) -> syn::Result<&'a mut FieldsNamed> {
+    match ast {
+        Data::Struct(DataStruct {
+            fields: Fields::Named(ref mut fields),
+            ..
+        }) => Ok(fields),
+        _ => Err(syn::Error::new(ident.span(), "Expected named struct")),
+    }
+}
+
+/// This macro is in charge of generating the Debug implementation for the struct and the `::new`
+/// method. It is optional to include.
+///
+/// The implementation for the Debug trait will omit all the padding fields.
+#[proc_macro_derive(LazyRe)]
+pub fn derive_helper_attr(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+    match derive_helper_attr_impl(ast) {
+        Ok(res) => res,
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+fn derive_helper_attr_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
+    let fields = &mut get_fields(&mut ast.data, &ast.ident)?.named;
+
+    let ident_string = ast.ident.to_string();
+    let ident = ast.ident;
+    // Safety:
+    // We are sure we're reading things that *actually* exist in memory.
+    let fields_names = fields
+        .iter()
+        .flat_map(|x| &x.ident)
+        .filter(|x| !x.to_string().starts_with("__pad")) // This is ugly, I wish we didn't need to do this.
+        .map(|ident| {
+            let ident_string = ident.to_string();
+            return quote! { .field(#ident_string,
+                   unsafe { &std::ptr::read_unaligned(std::ptr::addr_of!(self.#ident)) }) };
+        });
+
+    let output = quote! {
+        impl std::fmt::Debug for #ident {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                return f.debug_struct(#ident_string)
+                    #( #fields_names )*
+                    .finish();
+            }
+        }
+    };
+
+    Ok(output.into())
 }
 
 impl Parse for Offset {
@@ -38,15 +88,7 @@ fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
     let mut current_ix: usize = 0;
     let mut is_repr_c_packed = false;
 
-    let fields = match &mut ast.data {
-        Data::Struct(DataStruct {
-            fields: Fields::Named(ref mut fields),
-            ..
-        }) => &mut fields.named,
-        _ => {
-            return Err(syn::Error::new(ast.ident.span(), "Expected named struct"));
-        }
-    };
+    let fields = &mut get_fields(&mut ast.data, &ast.ident)?.named;
 
     // We need to check if the struct we're working with implements #[repr(C, packed)]. That's the
     // only way we can guarantee the sizes correspond to what we're declaring, since a struct with

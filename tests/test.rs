@@ -1,4 +1,4 @@
-use lazy_re::lazy_re;
+use lazy_re::{lazy_re, LazyRe};
 
 #[lazy_re]
 #[repr(C, packed)]
@@ -12,6 +12,7 @@ struct Foo {
 
 #[lazy_re]
 #[repr(C, packed)]
+#[derive(LazyRe)]
 struct Bar {
     no_offset: usize,
 
@@ -55,4 +56,10 @@ fn test_struct_size() {
     assert_eq!(std::mem::size_of::<Foo>(), 0x90 + std::mem::size_of::<usize>());
     assert_eq!(std::mem::size_of::<Bar>(), 0x42 + std::mem::size_of::<usize>());
     assert_eq!(std::mem::size_of::<PlayerEntity>(), 0x90 + std::mem::size_of::<f32>() * 3);
+}
+
+#[test]
+fn test_debig() {
+    let bar: Bar = unsafe { std::mem::zeroed() };
+    println!("{:?}", bar);
 }
