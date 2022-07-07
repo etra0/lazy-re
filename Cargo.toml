@@ -3,6 +3,10 @@ name = "lazy-re"
 version = "0.1.0"
 edition = "2021"
 authors = ["Sebastián Aedo <sebastian.aedo29@gmail.com>"]
+license-file = "LICENSE"
+keywords = ["reverse-engineering", "proc-macro"]
+description = "A library for lazy reverse engineers"
+repository = "https://github.com/etra0/lazy-re"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
