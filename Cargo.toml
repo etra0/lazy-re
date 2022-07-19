@@ -1,6 +1,6 @@
 [package]
 name = "lazy-re"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Sebastián Aedo <sebastian.aedo29@gmail.com>"]
 license-file = "LICENSE"
@@ -15,6 +15,7 @@ quote = "1.0"
 
 [dev-dependencies]
 trybuild = "1.0"
+memoffset = "0.6.5"
 
 [lib]
 proc-macro = true

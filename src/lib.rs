@@ -57,7 +57,7 @@ fn derive_helper_attr_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
         .map(|ident| {
             let ident_string = ident.to_string();
             return quote! { .field(#ident_string,
-                   unsafe { &std::ptr::read_unaligned(std::ptr::addr_of!(self.#ident)) }) };
+            unsafe { &std::ptr::read_unaligned(std::ptr::addr_of!(self.#ident)) }) };
         });
 
     let output = quote! {
@@ -148,7 +148,29 @@ fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
 
         let new_ident = format_ident!("__pad{:03}", current_ix);
         current_ix += 1;
-        let all_fields_ty = all_fields.iter().map(|field| &field.ty);
+
+        // In the case of pointers, to avoid fighting with generic types, we can just assume that
+        // the size of a pointer (that is not dyn) is just usize.
+        let all_fields_ty = all_fields.iter().map(|field| {
+            match &field.ty {
+                syn::Type::Reference(r) => {
+                    match &*r.elem {
+                        // We have to take into account every DST, those includes the dyn pointers
+                        // and the slices, which basically are fat pointers. For every other case
+                        // we can use a single usize.
+                        syn::Type::TraitObject(_) | syn::Type::Slice(_) => {
+                            syn::Type::Verbatim(quote! {(usize, usize)})
+                        },
+                        syn::Type::Path(syn::TypePath { path, .. }) if path.is_ident("str") => {
+                            syn::Type::Verbatim(quote! {(usize, usize)})
+                        },
+                        _ => syn::Type::Verbatim(quote! {usize}.into()),
+                    }
+                }
+                other => other.clone(),
+            }
+        });
+
         let field_to_add = syn::Field::parse_named
             .parse2(quote! {  #new_ident: [u8; #offs - (0 #(+ std::mem::size_of::<#all_fields_ty>())*)]})
             .unwrap();
