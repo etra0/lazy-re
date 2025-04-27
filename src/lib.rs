@@ -7,9 +7,12 @@
 //! this proc macro will generate it for you!
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
+use syn::spanned::Spanned;
 use std::collections::HashSet;
 use syn::parse::{Parse, Parser};
-use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields, FieldsNamed, LitInt, Token};
+use syn::{
+    parse_macro_input, Data, DataStruct, DeriveInput, Fields, FieldsNamed, LitInt, Token, Type,
+};
 
 struct Offset(usize);
 
@@ -124,7 +127,7 @@ fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
     }
 
     let local_fields = std::mem::replace(fields, syn::punctuated::Punctuated::new());
-    for mut field in IntoIterator::into_iter(local_fields) {
+    for mut field in local_fields.into_iter() {
         let mut offs = None;
         // We need to check the attribute offset is actually present on the struct.
         let mut ix_to_remove = None;
@@ -151,25 +154,7 @@ fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
 
         // In the case of pointers, to avoid fighting with generic types, we can just assume that
         // the size of a pointer (that is not dyn) is just usize.
-        let all_fields_ty = all_fields.iter().map(|field| {
-            match &field.ty {
-                syn::Type::Reference(r) => {
-                    match &*r.elem {
-                        // We have to take into account every DST, those includes the dyn pointers
-                        // and the slices, which basically are fat pointers. For every other case
-                        // we can use a single usize.
-                        syn::Type::TraitObject(_) | syn::Type::Slice(_) => {
-                            syn::Type::Verbatim(quote! {(usize, usize)})
-                        },
-                        syn::Type::Path(syn::TypePath { path, .. }) if path.is_ident("str") => {
-                            syn::Type::Verbatim(quote! {(usize, usize)})
-                        },
-                        _ => syn::Type::Verbatim(quote! {usize}.into()),
-                    }
-                }
-                other => other.clone(),
-            }
-        });
+        let all_fields_ty = map_field_type(&all_fields)?;
 
         let field_to_add = syn::Field::parse_named
             .parse2(quote! {  #new_ident: [u8; #offs - (0 #(+ std::mem::size_of::<#all_fields_ty>())*)]})
@@ -182,6 +167,51 @@ fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
     fields.extend(all_fields.drain(..));
 
     Ok(quote! { #ast }.into())
+}
+
+fn reduce_complex_type(field: &syn::Field) -> syn::Result<Type> {
+    let reduced_type = match &field.ty {
+        syn::Type::Reference(r) => {
+            match &*r.elem {
+                // We have to take into account every DST, those includes the dyn pointers
+                // and the slices, which basically are fat pointers. For every other case
+                // we can use a single usize.
+                syn::Type::TraitObject(_) | syn::Type::Slice(_) => {
+                    syn::Type::Verbatim(quote! {(usize, usize)})
+                },
+                syn::Type::Path(syn::TypePath { path, .. }) if path.is_ident("str") => {
+                    syn::Type::Verbatim(quote! {(usize, usize)})
+                },
+                _ => syn::Type::Verbatim(quote! {usize}.into()),
+            }
+        },
+        syn::Type::Path(syn::TypePath { path, .. })
+            if path.segments.last().unwrap().ident == "Option" =>
+        {
+            let last_segment = path.segments.last().unwrap();
+            let syn::PathArguments::AngleBracketed(angle_bracketed) = &last_segment.arguments
+            else {
+                return Err(syn::Error::new(last_segment.span(), "Option *has* to have a generic argument"))
+            };
+            let first_generic = angle_bracketed.args.first().unwrap();
+            if let syn::GenericArgument::Type(Type::Reference(_)) = first_generic {
+                syn::Type::Verbatim(quote! {usize}.into())
+            } else {
+                return Err(syn::Error::new(field.span(), "We can only handle Option<&T> for now"))
+            }
+        },
+        other => other.clone(),
+    };
+
+    Ok(reduced_type)
+}
+
+fn map_field_type(all_fields: &Vec<syn::Field>) -> syn::Result<Vec<Type>> {
+    let all_fields_ty: syn::Result<Vec<syn::Type>> = all_fields
+        .iter()
+        .map(reduce_complex_type)
+        .collect();
+    all_fields_ty
 }
 
 /// This proc macro will generate padding fields for your struct every time you have a struct that

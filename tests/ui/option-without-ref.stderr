@@ -1,0 +1,5 @@
+error: We can only handle Option<&T> for now
+ --> tests/ui/option-without-ref.rs:7:3
+  |
+7 |   b: Option<f32>,
+  |   ^
