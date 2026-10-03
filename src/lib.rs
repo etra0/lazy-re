@@ -126,6 +126,9 @@ fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
         ));
     }
 
+    let mut last_offset: usize = 0;
+    let mut unpadded_fields_ty = Vec::new();
+
     let local_fields = std::mem::replace(fields, syn::punctuated::Punctuated::new());
     for mut field in local_fields.into_iter() {
         let mut offs = None;
@@ -140,27 +143,24 @@ fn lazy_re_impl(mut ast: DeriveInput) -> syn::Result<TokenStream> {
             ix_to_remove = Some(i);
         }
 
-        if offs.is_none() {
-            all_fields.push(field);
-            continue;
+        if let Some(ix) = ix_to_remove {
+            field.attrs.remove(ix);
+            let target_offs = offs.unwrap();
+
+            let new_ident = format_ident!("__pad{:03}", current_ix);
+            current_ix += 1;
+
+            let field_to_add = syn::Field::parse_named
+                .parse2(quote! {  #new_ident: [u8; #target_offs - (#last_offset #(+ std::mem::size_of::<#unpadded_fields_ty>())*)]})
+                .unwrap();
+
+            all_fields.push(field_to_add);
+            last_offset = target_offs;
+            unpadded_fields_ty.clear();
         }
 
-        // ix_to_remove is Some if offs is some, So we can be sure this would never fail.
-        field.attrs.remove(ix_to_remove.unwrap());
-        let offs = offs.unwrap();
-
-        let new_ident = format_ident!("__pad{:03}", current_ix);
-        current_ix += 1;
-
-        // In the case of pointers, to avoid fighting with generic types, we can just assume that
-        // the size of a pointer (that is not dyn) is just usize.
-        let all_fields_ty = map_field_type(&all_fields)?;
-
-        let field_to_add = syn::Field::parse_named
-            .parse2(quote! {  #new_ident: [u8; #offs - (0 #(+ std::mem::size_of::<#all_fields_ty>())*)]})
-            .unwrap();
-
-        all_fields.push(field_to_add);
+        let reduced_ty = reduce_complex_type(&field)?;
+        unpadded_fields_ty.push(reduced_ty);
         all_fields.push(field);
     }
 
@@ -206,13 +206,6 @@ fn reduce_complex_type(field: &syn::Field) -> syn::Result<Type> {
     Ok(reduced_type)
 }
 
-fn map_field_type(all_fields: &Vec<syn::Field>) -> syn::Result<Vec<Type>> {
-    let all_fields_ty: syn::Result<Vec<syn::Type>> = all_fields
-        .iter()
-        .map(reduce_complex_type)
-        .collect();
-    all_fields_ty
-}
 
 /// This proc macro will generate padding fields for your struct every time you have a struct that
 /// has fields with the macro.

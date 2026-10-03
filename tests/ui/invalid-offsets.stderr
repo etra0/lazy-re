@@ -1,7 +1,7 @@
-error[E0080]: evaluation of constant value failed
+error[E0080]: attempt to compute `40_usize - 56_usize`, which would overflow
  --> tests/ui/invalid-offsets.rs:4:1
   |
 4 | #[lazy_re]
-  | ^^^^^^^^^^ attempt to compute `40_usize - 56_usize`, which would overflow
+  | ^^^^^^^^^^ evaluation of `Foo::__pad001::{constant#0}` failed here
   |
   = note: this error originates in the attribute macro `lazy_re` (in Nightly builds, run with -Z macro-backtrace for more info)
